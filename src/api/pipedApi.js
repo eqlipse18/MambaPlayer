@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BACKEND_URL = 'https://mamba-backend-xxxx.onrender.com'; // apna URL
+const BACKEND_URL = 'https://mamba-backend.onrender.com'; // apna URL
 
 export const searchSongs = async query => {
   const response = await axios.get(`${BACKEND_URL}/search`, {
