@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const ytdl = require('ytdl-core');
+const ytdlp = require('yt-dlp-exec');
 const cors = require('cors');
 const axios = require('axios');
 
@@ -42,20 +42,27 @@ app.get('/search', async (req, res) => {
 app.get('/stream/:videoId', async (req, res) => {
   try {
     const { videoId } = req.params;
-    const info = await ytdl.getInfo(
-      `https://www.youtube.com/watch?v=${videoId}`,
-    );
-    const format = ytdl.chooseFormat(info.formats, {
-      quality: 'highestaudio',
-      filter: 'audioonly',
+
+    const info = await ytdlp(`https://www.youtube.com/watch?v=${videoId}`, {
+      dumpSingleJson: true,
+      noWarnings: true,
+      noCallHome: true,
+      preferFreeFormats: true,
+      format: 'bestaudio',
     });
 
+    // Best audio format dhundho
+    const audioFormat =
+      info.formats
+        .filter(f => f.acodec !== 'none' && f.vcodec === 'none')
+        .sort((a, b) => (b.abr || 0) - (a.abr || 0))[0] || info.formats[0];
+
     res.json({
-      streamUrl: format.url,
-      title: info.videoDetails.title,
-      artist: info.videoDetails.author.name,
-      duration: parseInt(info.videoDetails.lengthSeconds),
-      thumbnail: info.videoDetails.thumbnails?.pop()?.url,
+      streamUrl: audioFormat.url,
+      title: info.title,
+      artist: info.uploader,
+      duration: info.duration,
+      thumbnail: info.thumbnail,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
