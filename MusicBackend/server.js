@@ -46,12 +46,11 @@ app.get('/stream/:videoId', async (req, res) => {
     const info = await ytdlp(`https://www.youtube.com/watch?v=${videoId}`, {
       dumpSingleJson: true,
       noWarnings: true,
-      noCallHome: true,
       preferFreeFormats: true,
       format: 'bestaudio',
+      extractorArgs: 'youtube:player_client=mweb', // ← yeh add kiya, mweb bot nahi lagta
     });
 
-    // Best audio format dhundho
     const audioFormat =
       info.formats
         .filter(f => f.acodec !== 'none' && f.vcodec === 'none')
@@ -68,7 +67,6 @@ app.get('/stream/:videoId', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 // 🔥 Trending endpoint
 app.get('/trending', async (req, res) => {
   try {
