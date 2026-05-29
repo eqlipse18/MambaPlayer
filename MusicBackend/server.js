@@ -5,6 +5,8 @@ const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
 
+const fs = require('fs');
+const os = require('os');
 const app = express();
 app.use(cors());
 
@@ -39,23 +41,35 @@ app.get('/search', async (req, res) => {
   }
 });
 
+const getCookiesPath = () => {
+  const cookiesB64 = process.env.YOUTUBE_COOKIES_BASE64;
+  if (!cookiesB64) return null;
+
+  const tmpPath = path.join(os.tmpdir(), 'yt_cookies.txt');
+  const content = Buffer.from(cookiesB64, 'base64').toString('utf-8');
+  fs.writeFileSync(tmpPath, content);
+  return tmpPath;
+};
 // 🎵 Stream endpoint
 app.get('/stream/:videoId', async (req, res) => {
   try {
     const { videoId } = req.params;
-    const cookiesPath =
-      process.env.NODE_ENV === 'production'
-        ? '/etc/secrets/cookies.txt' // Render pe
-        : path.join(__dirname, 'cookies.txt'); // Local pe
+    const cookiesPath = getCookiesPath();
 
-    const info = await ytdlp(`https://www.youtube.com/watch?v=${videoId}`, {
+    const options = {
       dumpSingleJson: true,
       noWarnings: true,
       preferFreeFormats: true,
       format: 'bestaudio',
-      cookies: cookiesPath, // ← cookies add kiya
       extractorArgs: 'youtube:player_client=web',
-    });
+    };
+
+    if (cookiesPath) options.cookies = cookiesPath;
+
+    const info = await ytdlp(
+      `https://www.youtube.com/watch?v=${videoId}`,
+      options,
+    );
 
     const audioFormat =
       info.formats
