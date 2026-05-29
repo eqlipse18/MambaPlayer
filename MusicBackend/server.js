@@ -3,6 +3,7 @@ const express = require('express');
 const ytdlp = require('yt-dlp-exec');
 const cors = require('cors');
 const axios = require('axios');
+const path = require('path');
 
 const app = express();
 app.use(cors());
@@ -42,13 +43,18 @@ app.get('/search', async (req, res) => {
 app.get('/stream/:videoId', async (req, res) => {
   try {
     const { videoId } = req.params;
+    const cookiesPath =
+      process.env.NODE_ENV === 'production'
+        ? '/etc/secrets/cookies.txt' // Render pe
+        : path.join(__dirname, 'cookies.txt'); // Local pe
 
     const info = await ytdlp(`https://www.youtube.com/watch?v=${videoId}`, {
       dumpSingleJson: true,
       noWarnings: true,
       preferFreeFormats: true,
       format: 'bestaudio',
-      extractorArgs: 'youtube:player_client=mweb', // ← yeh add kiya, mweb bot nahi lagta
+      cookies: cookiesPath, // ← cookies add kiya
+      extractorArgs: 'youtube:player_client=web',
     });
 
     const audioFormat =
