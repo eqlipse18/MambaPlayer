@@ -1,38 +1,31 @@
-require('dotenv').config();
 const express = require('express');
-const ytdlp = require('yt-dlp-exec');
 const cors = require('cors');
 const axios = require('axios');
-const path = require('path');
 
-const fs = require('fs');
-const os = require('os');
 const app = express();
 app.use(cors());
 
-const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
-const YOUTUBE_API = 'https://www.googleapis.com/youtube/v3';
+const ITUNES_API = 'https://itunes.apple.com';
 
-// 🔍 Search endpoint
+// 🔍 Search
 app.get('/search', async (req, res) => {
   try {
     const { q } = req.query;
-    const response = await axios.get(`${YOUTUBE_API}/search`, {
+    const response = await axios.get(`${ITUNES_API}/search`, {
       params: {
-        part: 'snippet',
-        q: q + ' song',
-        type: 'video',
-        videoCategoryId: '10',
-        maxResults: 20,
-        key: YOUTUBE_API_KEY,
+        term: q,
+        media: 'music',
+        limit: 20,
       },
     });
 
-    const songs = response.data.items.map(item => ({
-      id: item.id.videoId,
-      title: item.snippet.title,
-      artist: item.snippet.channelTitle,
-      thumbnail: item.snippet.thumbnails?.medium?.url,
+    const songs = response.data.results.map(track => ({
+      id: String(track.trackId),
+      title: track.trackName,
+      artist: track.artistName,
+      thumbnail: track.artworkUrl100,
+      duration: Math.floor(track.trackTimeMillis / 1000),
+      preview: track.previewUrl,
     }));
 
     res.json(songs);
@@ -41,71 +34,43 @@ app.get('/search', async (req, res) => {
   }
 });
 
-const getCookiesPath = () => {
-  const cookiesB64 = process.env.YOUTUBE_COOKIES_BASE64;
-  if (!cookiesB64) return null;
-
-  const tmpPath = path.join(os.tmpdir(), 'yt_cookies.txt');
-  const content = Buffer.from(cookiesB64, 'base64').toString('utf-8');
-  fs.writeFileSync(tmpPath, content);
-  return tmpPath;
-};
-// 🎵 Stream endpoint
-app.get('/stream/:videoId', async (req, res) => {
+// 🎵 Stream
+app.get('/stream/:trackId', async (req, res) => {
   try {
-    const { videoId } = req.params;
-    const cookiesPath = getCookiesPath();
+    const { trackId } = req.params;
+    const response = await axios.get(`${ITUNES_API}/lookup`, {
+      params: { id: trackId },
+    });
 
-    const options = {
-      dumpSingleJson: true,
-      noWarnings: true,
-      preferFreeFormats: true,
-      format: 'bestaudio',
-      extractorArgs: 'youtube:player_client=web',
-    };
-
-    if (cookiesPath) options.cookies = cookiesPath;
-
-    const info = await ytdlp(
-      `https://www.youtube.com/watch?v=${videoId}`,
-      options,
-    );
-
-    const audioFormat =
-      info.formats
-        .filter(f => f.acodec !== 'none' && f.vcodec === 'none')
-        .sort((a, b) => (b.abr || 0) - (a.abr || 0))[0] || info.formats[0];
+    const track = response.data.results[0];
+    if (!track) throw new Error('Track not found');
 
     res.json({
-      streamUrl: audioFormat.url,
-      title: info.title,
-      artist: info.uploader,
-      duration: info.duration,
-      thumbnail: info.thumbnail,
+      streamUrl: track.previewUrl,
+      title: track.trackName,
+      artist: track.artistName,
+      duration: Math.floor(track.trackTimeMillis / 1000),
+      thumbnail: track.artworkUrl100,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-// 🔥 Trending endpoint
+
+// 🔥 Trending — iTunes top charts
 app.get('/trending', async (req, res) => {
   try {
-    const response = await axios.get(`${YOUTUBE_API}/videos`, {
-      params: {
-        part: 'snippet',
-        chart: 'mostPopular',
-        videoCategoryId: '10',
-        regionCode: 'NP',
-        maxResults: 20,
-        key: YOUTUBE_API_KEY,
-      },
-    });
+    const response = await axios.get(
+      'https://rss.applemarketingtools.com/api/v2/np/music/most-played/20/songs.json',
+    );
 
-    const songs = response.data.items.map(item => ({
-      id: item.id,
-      title: item.snippet.title,
-      artist: item.snippet.channelTitle,
-      thumbnail: item.snippet.thumbnails?.medium?.url,
+    const songs = response.data.feed.results.map(track => ({
+      id: track.id,
+      title: track.name,
+      artist: track.artistName,
+      thumbnail: track.artworkUrl100,
+      duration: 0,
+      preview: null,
     }));
 
     res.json(songs);
@@ -117,4 +82,4 @@ app.get('/trending', async (req, res) => {
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on ${PORT}`));
+app.listen(PORT, () => console.log(`Server on ${PORT}`));
